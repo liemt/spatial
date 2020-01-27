@@ -1,0 +1,209 @@
+---
+title: "ESDA"
+author: "LTT"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Bring in the libraries needed for data processing and visualization
+```{r}
+library(rgdal)
+library(maptools)
+library(spdep)
+library(ggplot2)
+```
+
+There are a couple different ways to bring a shapefile into R. However, go with "readOGR"
+```{r}
+setwd("C:/Liem/GEOG515/Spring20/Labs/")
+Durham <- readOGR(".", "DurhamNC")  #readOGR is in rgdal
+# summary(Durham)
+Durham2 <- readShapePoly("DurhamNC") # readShapePoly is in maptools
+# summary(Durham2)
+Durham3 <- readShapeSpatial("DurhamNC")   #readShapeSpatial is in maptools
+# summary(Durham3)
+
+```
+
+
+Extract a 'queen's case' adjacency object
+```{r}
+Durham.queen.nb <- poly2nb(Durham, queen = TRUE)
+# summary(Durham.queen.nb)
+```
+
+Extract a 'rooks's case' djacency object
+```{r}
+Durham.rook.nb <- poly2nb(Durham, queen = FALSE)
+# summary(Durham.rook.nb)
+```
+
+# A simple plot with spplot
+```{r }
+spplot(Durham, "NO2_Asthma")
+```
+
+# Plot polygons and edges
+```{r}
+plot(Durham, col = "grey", axes = TRUE)
+plot(Durham.queen.nb, coordinates(Durham), pch = 19, cex = 0.6, add = TRUE)
+```
+
+# Plot boundaries and edges
+```{r}
+plot(Durham, border = "grey", axes = TRUE)
+title("Spatial Connectivity")
+plot(Durham.queen.nb, coordinates(Durham), pch = 19, cex = 0.6, add = TRUE)
+```
+
+# Construct row-standardized spatial weights
+```{r}
+Durham.lw_stand <- nb2listw(Durham.queen.nb, style = "W", zero.policy = TRUE)
+# summary(Durham.lw_stand)
+# what are they? Can you guess?
+Durham.lw_stand[[3]]
+```
+# Construct row-unstandardized spatial weights
+```{r}
+Durham.lw_unstand <- nb2listw(Durham.queen.nb, style = "B", zero.policy = TRUE)
+# summary(Durham.lw_unstand)
+# what are they? Can you guess?
+Durham.lw_unstand[[3]]
+``` 
+
+# Calculate Moran's I
+```{r}
+# help(moran.test)
+moran.test(Durham$PCTPARK, Durham.lw_stand, randomisation=FALSE)
+moran.test(Durham$PCTPARK, Durham.lw_stand)
+moran.test(Durham$PCTPARK, Durham.lw_unstand, randomisation=FALSE)
+moran.test(Durham$PCTPARK, Durham.lw_unstand)
+hist(Durham$PCTPARK)
+spplot(Durham, "PCTPARK")
+
+```
+A note of caution on the randomisation option. This is not the Monte Carlo randomization that people think of with Moran's I. In fact, the use of randomization in this case is a bit inaccurate. The randomisation option is a mathematical correction that tries to correct Moran's I for non-normality. It tries to correct the test for skewed data. Variance of I calculated under the assumption of randomisation, if FALSE normality.
+
+
+# Calculate local Moran's I
+```{r}
+Durham_localMoran<-localmoran(Durham$PCTPARK, Durham.lw_stand)
+```
+
+# Plot Local Moran's I
+
+```{r}
+# get our id from the rownames in a data.frame
+Durham@data$id <- Durham@data$OBJECTID 
+Durham@data$lmoran_ii <- Durham_localMoran[,1]
+Durham_df <- merge(
+  # convert to a data.frame
+  fortify(Durham, region="id"),
+  Durham@data, 
+  by="id"
+)
+
+ggplot(data=Durham_df, aes(x=long,y=lat,group=group)) +
+  geom_polygon(fill=scales::col_numeric("Blues",domain=c(-1,5))(Durham_df$lmoran_ii)) +
+  geom_path(color="white")+ coord_equal()
+
+```
+
+# Calculate Geary's C
+```{r} 
+geary.test(Durham$PCTPARK, Durham.lw_stand)
+```
+
+# Calculate local Geary's C
+```{r}
+Durham_localG<-localG(Durham$PCTPARK, Durham.lw_stand)
+range(Durham_localG[][1:193])
+
+```
+# Plot local Geary's C
+```{r}
+Durham@data$localG <- Durham_localG[][1:193]
+Durham_df <- merge(
+  # convert to a data.frame
+  fortify(Durham, region="id"),
+  Durham@data, 
+  by="id"
+)
+ggplot(data=Durham_df, aes(x=long,y=lat,group=group)) +
+  geom_polygon(fill=scales::col_numeric("Blues",domain=c(-3,6))(Durham_df$localG)) +
+  geom_path(color="white")+ coord_equal()
+
+```
+
+# Test some other distributions
+Poisson distribution
+```{r}
+Durham$poisson<-rpois(193, 0.9)
+hist(Durham$poisson)
+spplot(Durham, "poisson")
+# moran's I test
+moran.test(Durham$poisson, Durham.lw_stand, randomisation=TRUE)
+moran.test(Durham$poisson, Durham.lw_stand, randomisation=FALSE)
+```
+
+Exponential distribution
+```{r}
+Durham$expd<-rexp(193, 1)
+hist(Durham$expd)
+spplot(Durham, "expd")
+# moran's I test
+moran.test(Durham$expd, Durham.lw_stand, randomisation=TRUE)
+moran.test(Durham$expd, Durham.lw_stand, randomisation=FALSE)
+```
+
+
+# Moran's I for raster data
+some more libraries
+```{r}
+library(gstat)
+library(raster)
+library(ape)
+```
+
+Create raster
+```{r}
+side=20
+side2<-side*side
+# Define neighbourhood
+r.nb <- cell2nb(nrow=side, ncol=side, type="queen")
+# Construct unstandardized spatial weights
+r_B <- nb2listw(r.nb, style="B", zero.policy=TRUE)
+# Calculte weighted Neighbor Matrix
+matrixSize<-side*side
+wNeighborMatrix<-matrix(0,nrow=matrixSize,ncol=matrixSize)
+for (i in 1:matrixSize){
+  for (j in 1:length(r_B[[2]][[i]][])){
+    wNeighborMatrix[i,r_B[[2]][[i]][j]]<- r_B[[3]][[i]][j]
+  }
+}
+xy <- expand.grid(1:side, 1:side)
+names(xy) <- c("x","y")
+```
+
+
+define the gstat object (spatial model)
+```{r}
+g.dummy <- gstat(formula=z~1, locations=~x+y, dummy=T, beta=c(1,0,0.005), model=vgm(psill=0.05, range=14, model='Sph'), nmax=4)
+# make four simulations based on the stat object
+yy <- predict(g.dummy, newdata=xy, nsim=1)
+# show one realization
+gridded(yy) = ~x+y
+spplot(yy[1])
+# Assign one realization to z:
+xy$z <- yy[1][[1]]
+```
+
+Moran's I test
+```{r}
+Moran.I(xy$z, wNeighborMatrix)
+
+```
