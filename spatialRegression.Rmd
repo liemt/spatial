@@ -117,6 +117,21 @@ summary(NY.SMA)
 moran.test(resid(NY.SMA), NY_B)
 ```
 
+# Regular regression model
+```{r}
+NY.lm <- lm(Z ~ PEXPOSURE + PCTAGE65P + PCTOWNHOME, data=NY8)
+summary(NY.lm)
+moran.test(resid(NY.lm), NY_B)
+lm.LMtests(NY.lm,listw=NY_B, zero.policy=NULL, test="RLMerr", spChk=NULL, naSubset=TRUE)
+```
+
+# SMA model
+```{r}
+NY.SMA <- spautolm(Z ~ PEXPOSURE + PCTAGE65P + PCTOWNHOME, data=NY8,listw=listw_NY, family="SMA", method="eigen")
+summary(NY.SMA)
+moran.test(resid(NY.SMA), NY_B)
+```
+
 # spatial lag model (in spatialreg package)
 
 ```{r}
