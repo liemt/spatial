@@ -1,0 +1,94 @@
+---
+title: "ANCOVA - Mixed effects model"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+RIKZdata<-read.table("c:/liem/GEOG515/Zuur2009Datasets/RIKZ.txt",header = TRUE)
+summary(RIKZdata)
+```
+##### Data: marine benthic data from nine inter-tidal areas along the Dutch coast collected by the Dutch institute RIKZ in the summer of 2002. In each inter-tidal area (denoted by ‘beach’), five samples were taken, and the macro-fauna and abiotic variables were measured. Zuur et al. (2007) used species richness (the number of different species) and NAP (the height of a sampling station compared to mean tidal level) 
+```{r}
+library(nlme)
+# regression for each beach one by one
+summary(lm(Richness ~ NAP, subset = (Beach==1), data=RIKZdata))
+summary(lm(Richness ~ NAP, subset = (Beach==2), data=RIKZdata))
+# regression for each beach in one for loop
+Beta <- vector(length = 9)
+for(i in 1:9){
+  Mi <- summary(lm(Richness ~ NAP,subset = (Beach==i), data=RIKZdata))
+  Beta[i] <- Mi$coefficients[2, 1]
+}
+Beta
+```
+
+```{r}
+fExposure9 <- factor(c(0, 0, 1, 1, 0, 1, 1, 0, 0)) 
+tmp2 <- lm(Beta ~ fExposure9)
+summary(tmp2)
+```
+##### Mixed-effects model with random intercept
+```{r}
+RIKZdata$fBeach <- factor(RIKZdata$Beach)
+Mlme1 <- lme(Richness ~ NAP, random = ~1 | fBeach, data = RIKZdata)
+summary(Mlme1)
+coef(Mlme1)
+anova(Mlme1)
+# 
+Mlme0 <- lm(Richness ~ NAP + fBeach, data = RIKZdata)
+summary(Mlme0)
+anova(Mlme0)
+```
+##### Make graph
+```{r echo=FALSE}
+F0 <- fitted(Mlme1, level = 0)
+F1 <- fitted(Mlme1, level = 1)
+I <- order(RIKZdata$NAP)
+NAPs <- sort(RIKZdata$NAP) 
+plot(NAPs, F0[I], lwd = 4, type = "l",
+ylim = c(0, 22), ylab = "Richness", xlab = "NAP")
+
+for (i in 1:9){
+x1 <- RIKZdata$NAP[RIKZdata$Beach == i] 
+y1 <- F1[RIKZdata$Beach == i]
+K <- order(x1)
+lines(sort(x1), y1[K])
+}
+text(RIKZdata$NAP, RIKZdata$Richness, RIKZdata$Beach, cex = 0.9)
+```
+##### Mixed-effects model with random intercept and slope
+```{r}
+Mlme2 <- lme(Richness ~ NAP, random = ~1+NAP | fBeach, data = RIKZdata)
+summary(Mlme2)
+anova(Mlme2)
+Mlme2 <- lme(Richness ~ 1, random = ~1+NAP | fBeach, data = RIKZdata)
+summary(Mlme2)
+anova(Mlme2)
+```
+
+```{r}
+F0 <- fitted(Mlme2, level = 0)
+F1 <- fitted(Mlme2, level = 1)
+I <- order(RIKZdata$NAP)
+NAPs <- sort(RIKZdata$NAP) 
+plot(NAPs, F0[I], lwd = 4, type = "l",
+ylim = c(0, 22), ylab = "Richness", xlab = "NAP")
+
+for (i in 1:9){
+x1 <- RIKZdata$NAP[RIKZdata$Beach == i] 
+y1 <- F1[RIKZdata$Beach == i]
+K <- order(x1)
+lines(sort(x1), y1[K])
+}
+text(RIKZdata$NAP, RIKZdata$Richness, RIKZdata$Beach, cex = 0.9)
+```
+##### Random effects model
+
+```{r}
+Mlme3 <- lme(Richness ~ 1, random = ~1 | fBeach, data = RIKZdata)
+summary(Mlme3)
+anova(Mlme3)
+```
