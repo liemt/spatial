@@ -1,0 +1,67 @@
+---
+title: "Additive Model"
+author: "Liem Tran"
+output:
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+##### Example: Gillibrand et al. (2007): pelagic bioluminescence along a depth gradient in the northeast Atlantic Ocean.
+```{r}
+# Read in the ISIT dataset
+ISITdata<-read.table("c:/liem/GEOG515/Zuur2009Datasets/ISIT.txt",header = TRUE,sep="\t")
+summary(ISITdata)
+
+# Exlore structure of the dataset
+str(ISITdata) # Gives  the  structure of  data
+
+library(lattice)
+ISITdata$fStation <- factor(ISITdata$Station)
+xyplot(Sources ~ SampleDepth | fStation, data = ISITdata, 
+       xlab = "Sample Depth", ylab = "Sources",
+       strip = function(bg = 'white', ...)
+         strip.default(bg = 'white', ...),
+       panel = function(x, y) {
+         panel.grid(h = -1, v = 2) 
+         I1 <- order(x)
+         llines(x[I1], y[I1], col = 1)
+         })
+```
+##### Create scatterplot of pelagic bioluminescence versus depth gradient for cruise 16
+```{r}
+op <- par(mfrow = c(2, 2), mar = c(5, 4, 1, 2))
+Sources16 <- ISITdata$Sources[ISITdata$Station == 16]
+Depth16 <- ISITdata$SampleDepth[ISITdata$Station == 16]
+plot(Depth16, Sources16, type = "p")
+```
+##### Additive model
+```{r}
+library(gam)
+M1 <- gam(Sources16 ~ lo(Depth16, span = 0.5))
+plot(M1, se = TRUE)
+```
+##### Create a graph with fitted and observed values
+```{r}
+M2 <- predict(M1, se = TRUE)
+plot(Depth16, Sources16, type = "p")
+I1 <- order(Depth16)
+lines(Depth16[I1], M2$fit[I1], lty = 1)
+lines(Depth16[I1], M2$fit[I1] + 2 * M2$se[I1], lty = 2) 
+lines(Depth16[I1], M2$fit[I1] - 2 * M2$se[I1], lty = 2) 
+par(op)
+```
+##### different windows
+```{r}
+library(gam)
+M3 <- gam(Sources16 ~ lo(Depth16, span = 0.2))
+plot(M3, se = TRUE)
+```
+##### Another example
+```{r}
+data(kyphosis)
+    gam(Kyphosis ~ s(Age,4) + Number, family = binomial, data=kyphosis,
+    trace=TRUE)
+```
